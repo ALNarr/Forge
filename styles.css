@@ -71,22 +71,10 @@ nav {
     color: var(--accent-color);
 }
 
-/* CORRECTION IPHONE : Style du bouton hamburger réinitialisé */
 .hamburger {
     display: none;
     cursor: pointer;
     font-size: 2rem;
-    color: var(--light-color);
-    
-    /* Reset pour button */
-    background: none;
-    border: none;
-    padding: 0;
-    
-    /* Fix iOS */
-    -webkit-appearance: none;
-    -webkit-tap-highlight-color: transparent;
-    z-index: 2001;
 }
 
 /* Hero Section */
@@ -322,10 +310,9 @@ section {
     line-height: 1.8;
 }
 
-/* Grille 2x2 */
-.discovery-grid {
+.discovery-features {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 2rem;
     margin-bottom: 3rem;
 }
@@ -336,7 +323,6 @@ section {
     border-radius: 10px;
     padding: 2rem;
     transition: all 0.3s ease;
-    height: 100%;
 }
 
 .feature-card:hover {
@@ -699,50 +685,46 @@ footer {
 
 /* ===== Header auto-hide ===== */
 header {
-  position: fixed;           
+  position: fixed;           /* reste en haut mais peut se cacher */
   top: 0; left: 0; right: 0;
   transform: translateY(0);
   transition: transform 220ms ease, background-color 200ms ease;
   z-index: 9999;
 }
 
+/* caché quand on scrolle vers le bas */
 header.header-hidden {
   transform: translateY(-100%);
 }
 
+/* On laisse le JS régler le padding-top dynamique du body
+   en fonction de la hauteur réelle du header (évite les décalages). */
+
 /* Responsive Design */
 @media screen and (max-width: 768px) {
-    /* Menu Mobile Corrigé */
     .hamburger {
         display: block;
-        z-index: 2001; 
-        position: relative;
     }
     
     .nav-links {
         position: fixed;
-        top: 0;
-        right: 0;
-        height: 100vh;
-        width: 70%; 
-        max-width: 300px;
+        top: 70px;
+        left: 0;
+        width: 100%;
         background-color: var(--primary-color);
         flex-direction: column;
         align-items: center;
-        justify-content: center;
-        padding: 2rem;
-        box-shadow: -5px 0 15px rgba(0,0,0,0.5);
-        transform: translateX(100%); 
-        transition: transform 0.3s ease-in-out;
-        z-index: 2000;
+        padding: 2rem 0;
+        clip-path: circle(0px at 100% 0);
+        transition: clip-path 0.4s ease-in-out;
     }
     
     .nav-links.active {
-        transform: translateX(0%);
+        clip-path: circle(1000px at 100% 0);
     }
     
     .nav-links li {
-        margin: 1.5rem 0;
+        margin: 1rem 0;
     }
     
     .hero h1 {
@@ -761,8 +743,7 @@ header.header-hidden {
         height: 350px;
     }
 
-    /* Découverte en 1 colonne sur mobile */
-    .discovery-grid {
+    .discovery-features {
         grid-template-columns: 1fr;
     }
 

@@ -3,12 +3,9 @@ document.addEventListener('DOMContentLoaded', () => {
     /* ===== Header mobile ===== */
     const hamburger = document.querySelector('.hamburger');
     const navLinks = document.querySelector('.nav-links');
-    const header = document.querySelector('header');
-
     if (hamburger && navLinks) {
         hamburger.addEventListener('click', () => {
             navLinks.classList.toggle('active');
-            if(header) header.classList.remove('header-hidden');
         });
     }
 
@@ -21,13 +18,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!target) return;
 
             e.preventDefault();
-            
-            if (navLinks) navLinks.classList.remove('active');
-
             window.scrollTo({
                 top: target.offsetTop - 70,
                 behavior: 'smooth'
             });
+            if (navLinks) navLinks.classList.remove('active');
         });
     });
 
@@ -86,6 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
             carouselContainer.addEventListener('mouseleave', startAutoplay);
         }
 
+        // Contrôles clavier
         window.addEventListener('keydown', (e) => {
             if (e.key === 'ArrowRight') nextBtn.click();
             if (e.key === 'ArrowLeft') prevBtn.click();
@@ -109,26 +105,26 @@ document.addEventListener('DOMContentLoaded', () => {
             title: 'Couteau Artisanale',
             price: '200.-',
             description:
-                'Mon couteau artisanal est forgé à la main selon les techniques traditionnelles. La lame en acier trempé offre une coupe exceptionnelle et une durabilité incomparable. Le manche en chêne massif est façonné pour un confort optimal. Chaque pièce est unique et aiguisée à la pierre diamant pour une perfection de coupe.',
+                'Notre couteau artisanal est forgé à la main selon les techniques traditionnelles. La lame en acier trempé offre une coupe exceptionnelle et une durabilité incomparable. Le manche en chêne massif est façonné pour un confort optimal. Chaque pièce est unique et aiguisée à la pierre diamant pour une perfection de coupe.',
             image: './img/couteau.jpg'
         },
         'support': {
             title: 'Support pour Mangeoire',
-            price: '95.-',
+            price: '95€',
             description:
                 "Ce support élégant combine fonctionnalité et esthétique. Forgé dans un acier résistant aux intempéries, il accueillera vos mangeoires tout en décorant votre jardin. Sa conception permet d'accueillir différents types de mangeoires et sa finition protégée garantit une longue durée de vie en extérieur.",
             image: './img/bague.jpg'
         },
         'porte': {
             title: 'Heurtoir de Porte',
-            price: '120.-',
+            price: '120€',
             description:
                 "Un heurtoir de porte qui allie tradition et élégance. Le motif d'oiseau finement ciselé apporte une touche unique à votre entrée. Forgé dans un métal robuste avec une finition patinée, ce heurtoir est à la fois décoratif et fonctionnel. Installation simple sur tout type de porte.",
             image: './img/tirebch1.jpg'
         },
         'grille': {
             title: 'Grille Décorative',
-            price: '250.-',
+            price: '250€',
             description:
                 "Cette grille décorative est une véritable œuvre d'art pour votre intérieur ou extérieur. Les motifs floraux et d'oiseaux sont minutieusement forgés et assemblés pour créer une pièce unique. Parfaite comme séparation d'espace, décoration murale ou protection de fenêtre, elle allie sécurité et beauté.",
             image: './img/tirbch2.jpg'
@@ -180,34 +176,60 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-   /* ===== Effet scroll header : auto-hide + couleur ===== */
-    if (header) {
-      const setBodyOffset = () => {
-        document.body.style.paddingTop = `${header.offsetHeight}px`;
-      };
-      setBodyOffset();
-      window.addEventListener('resize', setBodyOffset);
-
-      let lastY = window.pageYOffset || 0;
-      const delta = 8; 
-
-      const onScroll = () => {
-        const y = window.pageYOffset || 0;
-
-        header.style.backgroundColor =
-          y > 100 ? 'rgba(46, 46, 46, 0.95)' : 'var(--primary-color)';
-
-        if (Math.abs(y - lastY) > delta) {
-          if (y > lastY && y > header.offsetHeight) {
-            header.classList.add('header-hidden');
-          } else {
-            header.classList.remove('header-hidden');
-          }
-          lastY = y;
-        }
-      };
-
-      window.addEventListener('scroll', onScroll, { passive: true });
-      onScroll();
+    /* ===== Formulaire de contact ===== */
+    const orderForm = document.getElementById('order-form');
+    if (orderForm) {
+        orderForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const formData = new FormData(orderForm);
+            const data = Object.fromEntries(formData);
+            alert(`Merci pour votre demande, ${data.name}! Nous vous contacterons bientôt à l'adresse ${data.email}.`);
+            orderForm.reset();
+        });
     }
+
+   /* ===== Effet scroll header : auto-hide + couleur ===== */
+const header = document.querySelector('header');
+if (header) {
+  // Décalage du contenu = hauteur réelle du header (au cas où il change en responsive)
+  const setBodyOffset = () => {
+    document.body.style.paddingTop = `${header.offsetHeight}px`;
+  };
+  setBodyOffset();
+  window.addEventListener('resize', setBodyOffset);
+
+  let lastY = window.pageYOffset || 0;
+  const delta = 8; // évite les micro-jitters
+
+  const onScroll = () => {
+    const y = window.pageYOffset || 0;
+
+    // Couleur de fond quand on a un peu scrollé
+    header.style.backgroundColor =
+      y > 100 ? 'rgba(46, 46, 46, 0.95)' : 'var(--primary-color)';
+
+    // Auto-hide : si on descend assez et qu'on a dépassé la hauteur du header -> cacher
+    if (Math.abs(y - lastY) > delta) {
+      if (y > lastY && y > header.offsetHeight) {
+        header.classList.add('header-hidden');
+      } else {
+        header.classList.remove('header-hidden');
+      }
+      lastY = y;
+    }
+  };
+
+  // Garde le header visible quand on ouvre le menu mobile
+  const hamburger = document.querySelector('.hamburger');
+  const navLinks = document.querySelector('.nav-links');
+  if (hamburger && navLinks) {
+    hamburger.addEventListener('click', () => {
+      navLinks.classList.toggle('active');
+      header.classList.remove('header-hidden');
+    });
+  }
+
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
 });
