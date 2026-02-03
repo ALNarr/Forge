@@ -24,6 +24,12 @@ document.addEventListener('DOMContentLoaded', () => {
     initSmoothScroll();
     initHeaderScroll();
     
+    // === NOUVEAU : Ralentir la vidéo ===
+    const video = document.querySelector('.hero-video');
+    if (video) {
+        video.playbackRate = 0.4; 
+    }
+
     // Lancer le chargement des données
     fetchDataAndRender();
 });

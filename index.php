@@ -6,7 +6,7 @@
   <link rel="icon" href="./img/logo.png" type="image/png" />
   <title>Forge Des Oiseleurs - Jérémy, Forgeron Coutelier</title>
   
-  <link rel="stylesheet" href="styles.css?v=3" />
+  <link rel="stylesheet" href="styles.css?v=4" />
   
   <style>
     header { transition: transform .3s ease; }
@@ -50,6 +50,17 @@
   </header>
 
   <section id="accueil" class="hero">
+    <!-- Vidéo en arrière-plan -->
+    <video class="hero-video" autoplay muted loop playsinline>
+        <source src="./img/videobckg.mov" type="video/mp4">
+        <!-- Fallback pour format .mov spécifique si besoin -->
+        <source src="./img/videobckg.mov" type="video/quicktime"> 
+        Votre navigateur ne supporte pas la vidéo.
+    </video>
+    
+    <!-- Filtre sombre pour que le texte reste lisible par dessus la vidéo -->
+    <div class="hero-overlay"></div>
+
     <div class="hero-content">
       <h1>Forge Des Oiseleurs</h1>
       <p>Artisanat forgé à la main avec passion et savoir-faire</p>
@@ -235,6 +246,6 @@
     });
   </script>
   
-  <script src="scripts.js?v=4"></script>
+  <script src="scripts.js?v=5"></script>
 </body>
 </html>
