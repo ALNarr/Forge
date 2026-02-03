@@ -1,15 +1,237 @@
-// Exécuter quand le DOM est prêt
+// URL de connexion à votre Google Sheet
+// J'utilise le format "gviz" qui fonctionne bien avec les liens de partage standards
+const SHEET_ID = '1IgriQX5L5hcTZEpVnuL2ef_ncY5Yhmck0LOyVrgKsYQ';
+const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`;
+
+// Stockage des produits pour le modal
+let globalProducts = {};
+
+// === NOUVEAU : Enregistrement du Service Worker pour le cache ===
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+            .then(registration => {
+                console.log('Service Worker enregistré avec succès :', registration.scope);
+            })
+            .catch(error => {
+                console.log('Échec de l\'enregistrement du Service Worker :', error);
+            });
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-    /* ===== Header mobile ===== */
+    initNavigation();
+    initSmoothScroll();
+    initHeaderScroll();
+    
+    // Lancer le chargement des données
+    fetchDataAndRender();
+});
+
+/* =========================================
+   1. CHARGEMENT ET TRAITEMENT DES DONNÉES
+   ========================================= */
+
+async function fetchDataAndRender() {
+    try {
+        const response = await fetch(SHEET_URL);
+        
+        if (!response.ok) {
+            throw new Error('Erreur réseau');
+        }
+
+        const data = await response.text();
+        const rows = parseCSV(data);
+        
+        // Filtrer les données selon la colonne "section"
+        const carouselItems = rows.filter(item => item.section === 'carousel');
+        const shopItems = rows.filter(item => item.section === 'boutique');
+
+        // Afficher les éléments
+        renderCarousel(carouselItems);
+        renderShop(shopItems);
+        
+        // Sauvegarder pour l'ouverture du modal
+        shopItems.forEach(item => {
+            globalProducts[item.id] = item;
+        });
+
+        initModal();
+
+    } catch (error) {
+        console.error("Erreur chargement Google Sheets :", error);
+        document.getElementById('products-grid').innerHTML = 
+            '<p class="error">Impossible de charger les produits.<br>Vérifiez que le Google Sheet est bien partagé (Public).</p>';
+    }
+}
+
+/* Transforme le texte CSV en objets JavaScript utilisables */
+function parseCSV(csvText) {
+    const lines = csvText.split('\n');
+    // On nettoie les en-têtes (supprime les guillemets et espaces)
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, '')); 
+    const result = [];
+
+    for (let i = 1; i < lines.length; i++) {
+        if (!lines[i].trim()) continue;
+        
+        // Regex robuste pour gérer les virgules à l'intérieur des descriptions
+        const regex = /(?:,|\n|^)("(?:(?:"")*[^"]*)*"|[^",\n]*|(?:\n|$))/g;
+        let match;
+        const rowData = [];
+        
+        while ((match = regex.exec(lines[i])) !== null) {
+             let val = match[1].replace(/^"|"$/g, '').replace(/""/g, '"'); 
+             if (match[0].startsWith(',')) val = val; 
+             if(val !== undefined) rowData.push(val.trim());
+        }
+        
+        // Création de l'objet (ex: {titre: "Couteau", prix: "144", ...})
+        const row = {};
+        headers.forEach((header, index) => {
+             row[header] = rowData[index] || '';
+        });
+        
+        // On ne garde que les lignes qui ont un ID (pour éviter les lignes vides)
+        if(row.id) {
+            result.push(row);
+        }
+    }
+    return result;
+}
+
+/* =========================================
+   2. GESTION DES IMAGES GOOGLE DRIVE (OPTIMISÉE)
+   ========================================= */
+
+// Ajout du paramètre 'size' pour contrôler la qualité (w500 = largeur 500px)
+function processImageURL(url, size = 1000) {
+    if (!url) return './img/placeholder.jpg'; 
+    
+    // Si c'est un lien Google Drive, on le convertit
+    if (url.includes('drive.google.com')) {
+        let id = '';
+        // Extraction de l'ID selon le format du lien
+        // Supporte : /file/d/ID/view, open?id=ID, etc.
+        if (url.includes('/file/d/')) {
+            const parts = url.split('/file/d/');
+            if (parts[1]) id = parts[1].split('/')[0];
+        } else if (url.includes('id=')) {
+            id = url.split('id=')[1].split('&')[0];
+        }
+
+        if (id) {
+            // OPTIMISATION : on utilise le paramètre sz=w{taille}
+            return `https://drive.google.com/thumbnail?id=${id}&sz=w${size}`;
+        }
+    }
+    return url;
+}
+
+/* =========================================
+   3. AFFICHAGE (RENDU)
+   ========================================= */
+
+function renderCarousel(items) {
+    const container = document.getElementById('dynamic-carousel');
+    const indicators = document.getElementById('dynamic-indicators');
+    
+    if (!items.length) {
+        container.innerHTML = '<p style="color:white; text-align:center; padding:2rem;">Aucune image à afficher</p>';
+        return;
+    }
+
+    container.innerHTML = '';
+    indicators.innerHTML = '';
+
+    items.forEach((item, index) => {
+        // Carrousel : on garde une bonne qualité (1000px)
+        const imageUrl = processImageURL(item.image, 1000);
+
+        // Slide
+        const slide = document.createElement('div');
+        slide.className = 'carousel-slide';
+        // Ajout de referrerpolicy="no-referrer" pour aider au chargement des images Google
+        slide.innerHTML = `
+            <img src="${imageUrl}" alt="${item.titre}" referrerpolicy="no-referrer" onerror="this.src='./img/logo.png'" />
+            <div class="carousel-caption">
+                <h3>${item.titre}</h3>
+                <p>${item.description}</p>
+            </div>
+        `;
+        container.appendChild(slide);
+
+        // Indicateur (point)
+        const dot = document.createElement('div');
+        dot.className = `carousel-indicator ${index === 0 ? 'active' : ''}`;
+        indicators.appendChild(dot);
+    });
+
+    document.querySelector('.carousel-prev').style.display = 'flex';
+    document.querySelector('.carousel-next').style.display = 'flex';
+
+    initCarouselLogic();
+}
+
+function renderShop(items) {
+    const grid = document.getElementById('products-grid');
+    grid.innerHTML = ''; 
+
+    if (items.length === 0) {
+        grid.innerHTML = '<p>Bientôt disponible...</p>';
+        return;
+    }
+
+    items.forEach(item => {
+        // OPTIMISATION : Pour la grille, on demande une image de 500px seulement
+        // C'est beaucoup plus léger à télécharger
+        const thumbnail = processImageURL(item.image, 500);
+        
+        // Pour le modal (quand on clique), on prépare le lien haute qualité (1200px)
+        const fullSize = processImageURL(item.image, 1200);
+        
+        // On sauvegarde l'URL haute qualité pour le modal
+        item.processedImage = fullSize;
+
+        const card = document.createElement('div');
+        card.className = 'product-card';
+        card.setAttribute('data-product', item.id);
+        
+        // On affiche la version "thumbnail" dans la grille
+        card.innerHTML = `
+            <div class="product-image">
+                <img src="${thumbnail}" alt="${item.titre}" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='./img/logo.png';" />
+            </div>
+            <div class="product-info">
+              <h3>${item.titre}</h3>
+              <p>${item.description.substring(0, 80)}${item.description.length > 80 ? '...' : ''}</p>
+              <span class="price">${item.prix} CHF</span>
+              <a href="#" class="btn product-details-btn">Voir détails</a>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+}
+
+/* =========================================
+   4. INTERFACES (MENU, CAROUSEL, MODAL)
+   ========================================= */
+
+function initNavigation() {
     const hamburger = document.querySelector('.hamburger');
     const navLinks = document.querySelector('.nav-links');
+    const header = document.querySelector('header');
+
     if (hamburger && navLinks) {
         hamburger.addEventListener('click', () => {
             navLinks.classList.toggle('active');
+            if(header) header.classList.remove('header-hidden');
         });
     }
+}
 
-    /* ===== Smooth scroll ancre ===== */
+function initSmoothScroll() {
+    const navLinks = document.querySelector('.nav-links');
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         anchor.addEventListener('click', (e) => {
             const targetId = anchor.getAttribute('href');
@@ -18,31 +240,33 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!target) return;
 
             e.preventDefault();
+            if (navLinks) navLinks.classList.remove('active');
+
             window.scrollTo({
                 top: target.offsetTop - 70,
                 behavior: 'smooth'
             });
-            if (navLinks) navLinks.classList.remove('active');
         });
     });
+}
 
-    /* ===== Carrousel ===== */
+function initCarouselLogic() {
     const carousel = document.querySelector('.carousel');
     const slides = document.querySelectorAll('.carousel-slide');
+    const indicators = document.querySelectorAll('.carousel-indicator');
     const prevBtn = document.querySelector('.carousel-prev');
     const nextBtn = document.querySelector('.carousel-next');
-    const indicators = document.querySelectorAll('.carousel-indicator');
-    const carouselContainer = document.querySelector('.carousel-container');
+    const container = document.querySelector('.carousel-container');
+
+    if (!carousel || !slides.length) return;
 
     let currentIndex = 0;
     let autoPlayInterval = null;
 
     function updateCarousel() {
-        if (!carousel || !slides.length) return;
         carousel.style.transform = `translateX(-${currentIndex * 100}%)`;
         indicators.forEach((ind, i) => {
             ind.classList.toggle('active', i === currentIndex);
-            ind.setAttribute('aria-selected', i === currentIndex ? 'true' : 'false');
         });
     }
 
@@ -59,39 +283,33 @@ document.addEventListener('DOMContentLoaded', () => {
         autoPlayInterval = null;
     }
 
-    if (slides.length && prevBtn && nextBtn) {
-        nextBtn.addEventListener('click', () => {
-            currentIndex = (currentIndex + 1) % slides.length;
-            updateCarousel();
-        });
-        prevBtn.addEventListener('click', () => {
-            currentIndex = (currentIndex - 1 + slides.length) % slides.length;
-            updateCarousel();
-        });
-
-        indicators.forEach((indicator, index) => {
-            indicator.addEventListener('click', () => {
-                currentIndex = index;
-                updateCarousel();
-            });
-        });
-
-        if (carouselContainer) {
-            carouselContainer.addEventListener('mouseenter', stopAutoplay);
-            carouselContainer.addEventListener('mouseleave', startAutoplay);
-        }
-
-        // Contrôles clavier
-        window.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowRight') nextBtn.click();
-            if (e.key === 'ArrowLeft') prevBtn.click();
-        });
-
+    nextBtn.addEventListener('click', () => {
+        currentIndex = (currentIndex + 1) % slides.length;
         updateCarousel();
-        startAutoplay();
+    });
+
+    prevBtn.addEventListener('click', () => {
+        currentIndex = (currentIndex - 1 + slides.length) % slides.length;
+        updateCarousel();
+    });
+
+    indicators.forEach((indicator, index) => {
+        indicator.addEventListener('click', () => {
+            currentIndex = index;
+            updateCarousel();
+        });
+    });
+
+    if (container) {
+        container.addEventListener('mouseenter', stopAutoplay);
+        container.addEventListener('mouseleave', startAutoplay);
     }
 
-    /* ===== Modal Produits ===== */
+    updateCarousel();
+    startAutoplay();
+}
+
+function initModal() {
     const modal = document.getElementById('product-modal');
     const modalImage = document.getElementById('modal-image');
     const modalTitle = document.getElementById('modal-title');
@@ -99,137 +317,96 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalDescription = document.getElementById('modal-description');
     const modalOrderBtn = document.getElementById('modal-order-btn');
     const closeModal = document.querySelector('.close-modal');
-
-    const productDetails = {
-        'Couteau': {
-            title: 'Couteau Artisanale',
-            price: '200.-',
-            description:
-                'Notre couteau artisanal est forgé à la main selon les techniques traditionnelles. La lame en acier trempé offre une coupe exceptionnelle et une durabilité incomparable. Le manche en chêne massif est façonné pour un confort optimal. Chaque pièce est unique et aiguisée à la pierre diamant pour une perfection de coupe.',
-            image: './img/couteau.jpg'
-        },
-        'support': {
-            title: 'Support pour Mangeoire',
-            price: '95€',
-            description:
-                "Ce support élégant combine fonctionnalité et esthétique. Forgé dans un acier résistant aux intempéries, il accueillera vos mangeoires tout en décorant votre jardin. Sa conception permet d'accueillir différents types de mangeoires et sa finition protégée garantit une longue durée de vie en extérieur.",
-            image: './img/bague.jpg'
-        },
-        'porte': {
-            title: 'Heurtoir de Porte',
-            price: '120€',
-            description:
-                "Un heurtoir de porte qui allie tradition et élégance. Le motif d'oiseau finement ciselé apporte une touche unique à votre entrée. Forgé dans un métal robuste avec une finition patinée, ce heurtoir est à la fois décoratif et fonctionnel. Installation simple sur tout type de porte.",
-            image: './img/tirebch1.jpg'
-        },
-        'grille': {
-            title: 'Grille Décorative',
-            price: '250€',
-            description:
-                "Cette grille décorative est une véritable œuvre d'art pour votre intérieur ou extérieur. Les motifs floraux et d'oiseaux sont minutieusement forgés et assemblés pour créer une pièce unique. Parfaite comme séparation d'espace, décoration murale ou protection de fenêtre, elle allie sécurité et beauté.",
-            image: './img/tirbch2.jpg'
-        }
-    };
-
+    
+    // CORRECTION : Appliquer la politique "no-referrer" à l'image du modal pour éviter le blocage
+    if (modalImage) {
+        modalImage.setAttribute('referrerpolicy', 'no-referrer');
+    }
+    
     let currentProductKey = null;
 
-    document.querySelectorAll('.product-details-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+    // Ouverture du modal au clic sur un bouton "Voir détails"
+    document.getElementById('products-grid').addEventListener('click', (e) => {
+        if (e.target.classList.contains('product-details-btn')) {
             e.preventDefault();
-            const card = btn.closest('.product-card');
-            if (!card || !modal) return;
-
+            const card = e.target.closest('.product-card');
             const key = card.getAttribute('data-product');
-            const product = productDetails[key];
-            if (!product) return;
+            const product = globalProducts[key];
 
-            currentProductKey = key;
-
-            modalImage.src = product.image;
-            modalImage.alt = product.title;
-            modalTitle.textContent = product.title;
-            modalPrice.textContent = product.price;
-            modalDescription.textContent = product.description;
-
-            modal.style.display = 'block';
-        });
+            if (product) {
+                currentProductKey = key; 
+                // Ici on utilise 'processedImage' qui contient maintenant la version Haute Qualité (1200px)
+                modalImage.src = product.processedImage || product.image;
+                modalImage.alt = product.titre;
+                // Si l'image du modal échoue, fallback aussi (avec reset pour éviter boucle)
+                modalImage.onerror = function() { 
+                    this.onerror = null; 
+                    this.src='./img/logo.png'; 
+                };
+                
+                modalTitle.textContent = product.titre;
+                modalPrice.textContent = product.prix + " CHF";
+                modalDescription.textContent = product.description;
+                modal.style.display = 'block';
+            }
+        }
     });
 
+    // Fermeture du modal
     if (closeModal && modal) {
-        closeModal.addEventListener('click', () => (modal.style.display = 'none'));
-        window.addEventListener('click', (e) => {
-            if (e.target === modal) modal.style.display = 'none';
-        });
-        window.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') modal.style.display = 'none';
-        });
+        const close = () => modal.style.display = 'none';
+        closeModal.addEventListener('click', close);
+        window.addEventListener('click', (e) => { if (e.target === modal) close(); });
+        window.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
     }
 
+    // Bouton "Commander" dans le modal -> remplit le formulaire
     if (modalOrderBtn && modal) {
         modalOrderBtn.addEventListener('click', () => {
             const productSelect = document.getElementById('product');
-            const map = { 'Couteau': 'couteau', 'support': 'support', 'porte': 'heurtoir', 'grille': 'grille' };
             if (productSelect && currentProductKey) {
-                productSelect.value = map[currentProductKey] || '';
+                // Vérifie si l'option existe, sinon l'ajoute
+                let option = Array.from(productSelect.options).find(opt => opt.value === currentProductKey);
+                
+                if(!option) {
+                    option = document.createElement('option');
+                    option.value = currentProductKey;
+                    option.text = globalProducts[currentProductKey].titre;
+                    productSelect.add(option);
+                }
+                productSelect.value = currentProductKey;
             }
             modal.style.display = 'none';
         });
     }
-
-    /* ===== Formulaire de contact ===== */
-    const orderForm = document.getElementById('order-form');
-    if (orderForm) {
-        orderForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const formData = new FormData(orderForm);
-            const data = Object.fromEntries(formData);
-            alert(`Merci pour votre demande, ${data.name}! Nous vous contacterons bientôt à l'adresse ${data.email}.`);
-            orderForm.reset();
-        });
-    }
-
-   /* ===== Effet scroll header : auto-hide + couleur ===== */
-const header = document.querySelector('header');
-if (header) {
-  // Décalage du contenu = hauteur réelle du header (au cas où il change en responsive)
-  const setBodyOffset = () => {
-    document.body.style.paddingTop = `${header.offsetHeight}px`;
-  };
-  setBodyOffset();
-  window.addEventListener('resize', setBodyOffset);
-
-  let lastY = window.pageYOffset || 0;
-  const delta = 8; // évite les micro-jitters
-
-  const onScroll = () => {
-    const y = window.pageYOffset || 0;
-
-    // Couleur de fond quand on a un peu scrollé
-    header.style.backgroundColor =
-      y > 100 ? 'rgba(46, 46, 46, 0.95)' : 'var(--primary-color)';
-
-    // Auto-hide : si on descend assez et qu'on a dépassé la hauteur du header -> cacher
-    if (Math.abs(y - lastY) > delta) {
-      if (y > lastY && y > header.offsetHeight) {
-        header.classList.add('header-hidden');
-      } else {
-        header.classList.remove('header-hidden');
-      }
-      lastY = y;
-    }
-  };
-
-  // Garde le header visible quand on ouvre le menu mobile
-  const hamburger = document.querySelector('.hamburger');
-  const navLinks = document.querySelector('.nav-links');
-  if (hamburger && navLinks) {
-    hamburger.addEventListener('click', () => {
-      navLinks.classList.toggle('active');
-      header.classList.remove('header-hidden');
-    });
-  }
-
-  window.addEventListener('scroll', onScroll, { passive: true });
-  onScroll();
 }
-});
+
+function initHeaderScroll() {
+    const header = document.querySelector('header');
+    if (header) {
+      const setBodyOffset = () => {
+        document.body.style.paddingTop = `${header.offsetHeight}px`;
+      };
+      setBodyOffset();
+      window.addEventListener('resize', setBodyOffset);
+
+      let lastY = window.pageYOffset || 0;
+      const delta = 8; 
+
+      const onScroll = () => {
+        const y = window.pageYOffset || 0;
+        header.style.backgroundColor = y > 100 ? 'rgba(46, 46, 46, 0.95)' : 'var(--primary-color)';
+
+        if (Math.abs(y - lastY) > delta) {
+          if (y > lastY && y > header.offsetHeight) {
+            header.classList.add('header-hidden');
+          } else {
+            header.classList.remove('header-hidden');
+          }
+          lastY = y;
+        }
+      };
+      window.addEventListener('scroll', onScroll, { passive: true });
+      onScroll();
+    }
+}
